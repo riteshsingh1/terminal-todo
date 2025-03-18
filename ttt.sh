@@ -158,8 +158,65 @@ remove_line_from_file() {
   mv "$temp_file" "$TASKS_FILE"
 }
 
+# Function to check for overdue tasks
+check_overdue_tasks() {
+  # Get today's date in dd/mm/yy format
+  today=$(date +%d/%m/%y)
+  
+  # Convert today to comparable format (yymmdd)
+  today_comparable=$(echo "$today" | awk -F'/' '{print $3$2$1}')
+  
+  # Count moved tasks
+  moved_count=0
+  
+  # Create temporary file
+  temp_file="$TASKS_FILE.tmp"
+  > "$temp_file"
+  
+  # Check each task
+  while IFS= read -r line; do
+    # Only check active tasks (not completed ones)
+    case "$line" in
+      DONE:*)
+        # Keep completed tasks as they are
+        echo "$line" >> "$temp_file"
+        ;;
+      *)
+        # Extract the date
+        task_date=$(echo "$line" | cut -d'|' -f2)
+        
+        # Convert task date to comparable format (yymmdd)
+        task_date_comparable=$(echo "$task_date" | awk -F'/' '{print $3$2$1}')
+        
+        # If task date is before today, update to today
+        if [ -n "$task_date_comparable" ] && [ "$task_date_comparable" -lt "$today_comparable" ]; then
+          # Replace the old date with today's date
+          updated_line=$(echo "$line" | sed "s/|$task_date|/|$today|/")
+          echo "$updated_line" >> "$temp_file"
+          moved_count=$((moved_count + 1))
+        else
+          # Keep the original line
+          echo "$line" >> "$temp_file"
+        fi
+        ;;
+    esac
+  done < "$TASKS_FILE"
+  
+  # Replace the original file with the updated one
+  mv "$temp_file" "$TASKS_FILE"
+  
+  # Show notification if tasks were moved
+  if [ "$moved_count" -gt 0 ]; then
+    echo "$YELLOW""$moved_count overdue task(s) moved to today ($today).""$RESET"
+    sleep 1
+  fi
+}
+
 # Function to interact with tasks
 interact_with_tasks() {
+  # Check for overdue tasks first
+  check_overdue_tasks
+  
   display_tasks
   count_tasks
   
