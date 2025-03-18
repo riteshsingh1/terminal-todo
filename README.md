@@ -43,6 +43,8 @@ Status: 3 active, 1 completed
 
 ## Installation
 
+### Method 1: Using the Installer (Recommended)
+
 ```bash
 # Clone this repository or download the files
 git clone https://github.com/riteshsingh1/terminal-todo.git
@@ -50,6 +52,33 @@ cd terminal-todo
 
 # Run the installation script
 ./install.sh
+```
+
+The installer will guide you through the process and give you two options:
+1. Install for the current user only (in `~/.local/bin`)
+2. Install system-wide (in `/usr/local/bin`, requires sudo)
+
+After installation, you can run `ttt` from anywhere in your terminal.
+
+### Method 2: Manual Installation
+
+```bash
+# Clone this repository
+git clone https://github.com/riteshsingh1/terminal-todo.git
+cd terminal-todo
+
+# Make the script executable
+chmod +x ttt
+
+# Option 1: Copy to a directory in your PATH
+cp ttt ~/.local/bin/   # For personal use
+# OR
+sudo cp ttt /usr/local/bin/   # System-wide installation (requires sudo)
+
+# Make sure ~/.local/bin is in your PATH (add to your shell profile if needed)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # for bash
+# OR
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc   # for zsh
 ```
 
 ## Usage
@@ -96,4 +125,34 @@ From the main screen:
 
 ## Data Storage
 
-All tasks are stored in `~/.ttt/tasks.txt` in a simple text format. 
+All tasks are stored in `~/.ttt/tasks.txt` in a simple text format.
+
+## Troubleshooting
+
+If you can't run `ttt` after installation, try these steps:
+
+1. Make sure the installation directory is in your PATH:
+   ```bash
+   echo $PATH
+   ```
+
+2. If you installed to `~/.local/bin` and it's not in your PATH, update your shell's configuration:
+   ```bash
+   # For Bash
+   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+   source ~/.bashrc
+   
+   # For Zsh
+   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+   source ~/.zshrc
+   ```
+
+3. Check if the script is executable:
+   ```bash
+   ls -l $(which ttt)
+   ```
+
+   If it's not executable, run:
+   ```bash
+   chmod +x $(which ttt)
+   ``` 
