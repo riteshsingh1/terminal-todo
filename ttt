@@ -42,24 +42,29 @@ show_help() {
 # Function to display tasks
 display_tasks() {
   clear
-  echo -e "\n${BOLD}${CYAN}==== Terminal Todo Tracker ====${RESET}\n"
+  echo -e "\n${BOLD}${CYAN}===== Terminal Todo Tracker =====${RESET}\n"
   
-  # Get unique dates and sort them
-  local dates=$(grep -v "^DONE:" "$TASKS_FILE" | cut -d'|' -f2 | sort -u)
+  # Get unique dates and sort them (include all dates)
+  local all_dates=$(cut -d'|' -f2 "$TASKS_FILE" | sort -u)
   
-  # Display active tasks by date
-  if [ -z "$dates" ]; then
-    echo -e "${YELLOW}No active tasks.${RESET}"
+  # Display all tasks by date
+  if [ -z "$all_dates" ]; then
+    echo -e "${YELLOW}No tasks found.${RESET}"
   else
-    echo -e "${BOLD}ACTIVE TASKS:${RESET}\n"
+    echo -e "${BOLD}TASKS:${RESET}\n"
     local task_num=1
     
-    for date in $dates; do
+    for date in $all_dates; do
       echo -e "${BOLD}${CYAN}Due: $date${RESET}"
       echo -e "${GRAY}----------------------------------------${RESET}"
       
-      grep "|$date|" "$TASKS_FILE" | grep -v "^DONE:" | while IFS='|' read -r status date task; do
-        echo -e " ${BOLD}${BLUE}[$task_num]${RESET} $task"
+      # Display both active and completed tasks for this date
+      grep "|$date|" "$TASKS_FILE" | while IFS='|' read -r status date task; do
+        if [[ "$status" == "DONE:" ]]; then
+          echo -e " ${BOLD}${BLUE}[$task_num]${RESET} ${STRIKETHROUGH}$task${RESET} ${GRAY}(done)${RESET}"
+        else
+          echo -e " ${BOLD}${BLUE}[$task_num]${RESET} $task"
+        fi
         task_num=$((task_num + 1))
       done
       echo ""
@@ -69,16 +74,6 @@ display_tasks() {
     echo -e "${ITALIC}${BOLD}Actions:${RESET}${ITALIC} Select task number, then choose:${RESET}"
     echo -e "${ITALIC} ${GREEN}d${RESET}${ITALIC}-Done  ${YELLOW}p${RESET}${ITALIC}-Postpone  ${RED}n${RESET}${ITALIC}-Not Required  ${BLUE}a${RESET}${ITALIC}-Add New  ${GRAY}q${RESET}${ITALIC}-Quit${RESET}\n"
     echo -e "${GRAY}${ITALIC}----------------------------------------${RESET}\n"
-  fi
-  
-  # Display completed tasks
-  if grep -q "^DONE:" "$TASKS_FILE"; then
-    echo -e "${BOLD}COMPLETED TASKS:${RESET}"
-    echo -e "${GRAY}----------------------------------------${RESET}"
-    grep "^DONE:" "$TASKS_FILE" | while IFS='|' read -r status date task; do
-      echo -e " ${STRIKETHROUGH}$task${RESET} (${GRAY}completed on $date${RESET})"
-    done
-    echo ""
   fi
 }
 
@@ -124,13 +119,13 @@ interact_with_tasks() {
   display_tasks
   count_tasks
   
-  # Get the list of active tasks
-  local active_tasks=$(grep -v "^DONE:" "$TASKS_FILE")
-  local task_count=$(echo "$active_tasks" | wc -l)
+  # Get the list of all tasks (both active and completed)
+  local all_tasks=$(cat "$TASKS_FILE")
+  local task_count=$(echo "$all_tasks" | wc -l)
   task_count=$(echo "$task_count" | tr -d ' ')
   
-  if [ "$task_count" -eq 0 ] || [ -z "$active_tasks" ]; then
-    echo -e "\n${YELLOW}No tasks to interact with.${RESET}"
+  if [ "$task_count" -eq 0 ] || [ -z "$all_tasks" ]; then
+    echo -e "\n${YELLOW}No tasks found.${RESET}"
     echo -e "${ITALIC}Press ${BLUE}'a'${RESET}${ITALIC} to add a new task or ${GRAY}'q'${RESET}${ITALIC} to quit.${RESET}"
     read -n 1 -s choice
     case "$choice" in
@@ -152,53 +147,88 @@ interact_with_tasks() {
     clear
     exit 0
   elif [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -le "$task_count" ] && [ "$selection" -gt 0 ]; then
-    local selected_line=$(echo "$active_tasks" | sed -n "${selection}p")
+    local selected_line=$(echo "$all_tasks" | sed -n "${selection}p")
     local task_content=$(echo "$selected_line" | cut -d'|' -f3)
+    local task_status=$(echo "$selected_line" | cut -d'|' -f1)
+    local task_date=$(echo "$selected_line" | cut -d'|' -f2)
     
-    echo -e "\n\n${BOLD}Selected:${RESET} ${CYAN}$task_content${RESET}"
-    echo -e "\n${ITALIC}${BOLD}What to do with this task?${RESET}${ITALIC}"
-    echo -e "${GREEN}d${RESET}${ITALIC}-Done  ${YELLOW}p${RESET}${ITALIC}-Postpone  ${RED}n${RESET}${ITALIC}-Not Required${RESET}"
-    read -n 1 -s action
-    
-    case "$action" in
-      d)
-        # Mark as done
-        sed -i.bak "/$selected_line/d" "$TASKS_FILE"
-        echo "DONE:|$(date +%d/%m/%y)|$task_content" >> "$TASKS_FILE"
-        echo -e "\n${GREEN}Task marked as done!${RESET}"
-        sleep 1
-        ;;
-      p)
-        # Postpone task
-        echo -e "\n\n${BOLD}Enter new due date (${YELLOW}dd/mm/yy${RESET}${BOLD}):${RESET}"
-        read -r new_date
-        
-        # Validate date format
-        if [[ ! $new_date =~ ^[0-9]{2}/[0-9]{2}/[0-9]{2}$ ]]; then
-          echo -e "\n${RED}Invalid date format. Please use dd/mm/yy${RESET}"
-          sleep 2
-        else
+    # Check if the task is already completed
+    if [[ "$task_status" == "DONE:" ]]; then
+      echo -e "\n\n${BOLD}Selected:${RESET} ${STRIKETHROUGH}${CYAN}$task_content${RESET} ${GRAY}(already completed)${RESET}"
+      echo -e "\n${ITALIC}${BOLD}What to do with this task?${RESET}${ITALIC}"
+      echo -e "${YELLOW}r${RESET}${ITALIC}-Restore  ${RED}n${RESET}${ITALIC}-Remove${RESET}"
+      read -n 1 -s action
+      
+      case "$action" in
+        r)
+          # Restore task (mark as active again)
           sed -i.bak "/$selected_line/d" "$TASKS_FILE"
-          echo "TODO:|$new_date|$task_content" >> "$TASKS_FILE"
-          echo -e "\n${YELLOW}Task postponed to $new_date.${RESET}"
+          echo "TODO:|$task_date|$task_content" >> "$TASKS_FILE"
+          echo -e "\n${YELLOW}Task restored to active status.${RESET}"
           sleep 1
-        fi
-        ;;
-      n)
-        # Not required
-        echo -e "\n${RED}Are you sure you want to remove this task? (y/n)${RESET}"
-        read -n 1 -s confirm
-        if [ "$confirm" = "y" ]; then
+          ;;
+        n)
+          # Remove task
+          echo -e "\n${RED}Are you sure you want to remove this task? (y/n)${RESET}"
+          read -n 1 -s confirm
+          if [ "$confirm" = "y" ]; then
+            sed -i.bak "/$selected_line/d" "$TASKS_FILE"
+            echo -e "\n${RED}Task removed.${RESET}"
+            sleep 1
+          fi
+          ;;
+        *)
+          echo -e "\n${RED}Invalid option.${RESET}"
+          sleep 1
+          ;;
+      esac
+    else
+      # Regular active task
+      echo -e "\n\n${BOLD}Selected:${RESET} ${CYAN}$task_content${RESET}"
+      echo -e "\n${ITALIC}${BOLD}What to do with this task?${RESET}${ITALIC}"
+      echo -e "${GREEN}d${RESET}${ITALIC}-Done  ${YELLOW}p${RESET}${ITALIC}-Postpone  ${RED}n${RESET}${ITALIC}-Not Required${RESET}"
+      read -n 1 -s action
+      
+      case "$action" in
+        d)
+          # Mark as done - keep the same due date
           sed -i.bak "/$selected_line/d" "$TASKS_FILE"
-          echo -e "\n${RED}Task removed.${RESET}"
+          echo "DONE:|$task_date|$task_content" >> "$TASKS_FILE"
+          echo -e "\n${GREEN}Task marked as done!${RESET}"
           sleep 1
-        fi
-        ;;
-      *)
-        echo -e "\n${RED}Invalid option.${RESET}"
-        sleep 1
-        ;;
-    esac
+          ;;
+        p)
+          # Postpone task
+          echo -e "\n\n${BOLD}Enter new due date (${YELLOW}dd/mm/yy${RESET}${BOLD}):${RESET}"
+          read -r new_date
+          
+          # Validate date format
+          if [[ ! $new_date =~ ^[0-9]{2}/[0-9]{2}/[0-9]{2}$ ]]; then
+            echo -e "\n${RED}Invalid date format. Please use dd/mm/yy${RESET}"
+            sleep 2
+          else
+            sed -i.bak "/$selected_line/d" "$TASKS_FILE"
+            echo "TODO:|$new_date|$task_content" >> "$TASKS_FILE"
+            echo -e "\n${YELLOW}Task postponed to $new_date.${RESET}"
+            sleep 1
+          fi
+          ;;
+        n)
+          # Not required
+          echo -e "\n${RED}Are you sure you want to remove this task? (y/n)${RESET}"
+          read -n 1 -s confirm
+          if [ "$confirm" = "y" ]; then
+            sed -i.bak "/$selected_line/d" "$TASKS_FILE"
+            echo -e "\n${RED}Task removed.${RESET}"
+            sleep 1
+          fi
+          ;;
+        *)
+          echo -e "\n${RED}Invalid option.${RESET}"
+          sleep 1
+          ;;
+      esac
+    fi
   else
     echo -e "\n${RED}Invalid selection.${RESET}"
     sleep 1

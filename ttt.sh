@@ -51,17 +51,17 @@ display_tasks() {
   clear_screen
   
   echo ""
-  echo "$BOLD""$CYAN""==== Terminal Todo Tracker ====""$RESET"
+  echo "$BOLD""$CYAN""===== Terminal Todo Tracker =====""$RESET"
   echo ""
   
-  # Get unique dates and sort them
-  dates=$(grep -v "^DONE:" "$TASKS_FILE" | cut -d'|' -f2 | sort -u)
+  # Get unique dates and sort them (include all dates)
+  dates=$(cut -d'|' -f2 "$TASKS_FILE" | sort -u)
   
-  # Display active tasks by date
+  # Display all tasks by date
   if [ -z "$dates" ]; then
-    echo "$YELLOW""No active tasks.""$RESET"
+    echo "$YELLOW""No tasks found.""$RESET"
   else
-    echo "$BOLD""ACTIVE TASKS:""$RESET"
+    echo "$BOLD""TASKS:""$RESET"
     echo ""
     
     task_num=1
@@ -70,8 +70,13 @@ display_tasks() {
       echo "$BOLD""$CYAN""Due: $date""$RESET"
       echo "$GRAY""----------------------------------------""$RESET"
       
-      grep "|$date|" "$TASKS_FILE" | grep -v "^DONE:" | while IFS='|' read -r status date task; do
-        echo " ""$BOLD""$BLUE""[$task_num]""$RESET"" $task"
+      # Display both active and completed tasks for this date
+      grep "|$date|" "$TASKS_FILE" | while IFS='|' read -r status date task; do
+        if [ "$status" = "DONE:" ]; then
+          echo " ""$BOLD""$BLUE""[$task_num]""$RESET"" ""$STRIKETHROUGH""$task""$RESET"" ""$GRAY""(done)""$RESET"
+        else
+          echo " ""$BOLD""$BLUE""[$task_num]""$RESET"" $task"
+        fi
         task_num=$((task_num + 1))
       done
       echo ""
@@ -81,16 +86,6 @@ display_tasks() {
     echo "$ITALIC""$BOLD""Actions:""$RESET""$ITALIC"" Select task number, then choose:""$RESET"
     echo "$ITALIC"" ""$GREEN""d""$RESET""$ITALIC""-Done  ""$YELLOW""p""$RESET""$ITALIC""-Postpone  ""$RED""n""$RESET""$ITALIC""-Not Required  ""$BLUE""a""$RESET""$ITALIC""-Add New  ""$GRAY""q""$RESET""$ITALIC""-Quit""$RESET"
     echo "$GRAY""$ITALIC""----------------------------------------""$RESET"
-    echo ""
-  fi
-  
-  # Display completed tasks
-  if grep -q "^DONE:" "$TASKS_FILE"; then
-    echo "$BOLD""COMPLETED TASKS:""$RESET"
-    echo "$GRAY""----------------------------------------""$RESET"
-    grep "^DONE:" "$TASKS_FILE" | while IFS='|' read -r status date task; do
-      echo " ""$STRIKETHROUGH""$task""$RESET"" (""$GRAY""completed on $date""$RESET"")"
-    done
     echo ""
   fi
 }
@@ -147,14 +142,14 @@ interact_with_tasks() {
   display_tasks
   count_tasks
   
-  # Get the list of active tasks
-  active_tasks=$(grep -v "^DONE:" "$TASKS_FILE")
-  task_count=$(echo "$active_tasks" | wc -l)
+  # Get the list of all tasks (both active and completed)
+  all_tasks=$(cat "$TASKS_FILE")
+  task_count=$(echo "$all_tasks" | wc -l)
   task_count=$(echo "$task_count" | tr -d ' ')
   
-  if [ "$task_count" -eq 0 ] || [ -z "$active_tasks" ]; then
+  if [ "$task_count" -eq 0 ] || [ -z "$all_tasks" ]; then
     echo ""
-    echo "$YELLOW""No tasks to interact with.""$RESET"
+    echo "$YELLOW""No tasks found.""$RESET"
     echo "$ITALIC""Press ""$BLUE""'a'""$RESET""$ITALIC"" to add a new task or ""$GRAY""'q'""$RESET""$ITALIC"" to quit.""$RESET"
     read choice
     case "$choice" in
@@ -177,73 +172,118 @@ interact_with_tasks() {
     clear_screen
     exit 0
   elif [ "$selection" -le "$task_count" ] 2>/dev/null && [ "$selection" -gt 0 ]; then
-    # Get the selected task
+    # Extract the selected task
     i=1
     selected_line=""
-    echo "$active_tasks" | while IFS= read -r line; do
+    
+    echo "$all_tasks" | while IFS= read -r line; do
       if [ "$i" -eq "$selection" ]; then
-        # We found our line
+        # Parse the selected line
         task_content=$(echo "$line" | cut -d'|' -f3)
+        task_status=$(echo "$line" | cut -d'|' -f1)
+        task_date=$(echo "$line" | cut -d'|' -f2)
         
-        echo ""
-        echo "$BOLD""Selected:""$RESET"" ""$CYAN""$task_content""$RESET"
-        echo ""
-        echo "$ITALIC""$BOLD""What to do with this task?""$RESET""$ITALIC"
-        echo "$GREEN""d""$RESET""$ITALIC""-Done  ""$YELLOW""p""$RESET""$ITALIC""-Postpone  ""$RED""n""$RESET""$ITALIC""-Not Required""$RESET"
-        read action
-        
-        case "$action" in
-          d)
-            # Mark as done
-            sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
-            mv "$TASKS_FILE.tmp" "$TASKS_FILE"
-            echo "DONE:|$(date +%d/%m/%y)|$task_content" >> "$TASKS_FILE"
-            echo ""
-            echo "$GREEN""Task marked as done!""$RESET"
-            sleep 1
-            ;;
-          p)
-            # Postpone task
-            echo ""
-            echo "$BOLD""Enter new due date (""$YELLOW""dd/mm/yy""$RESET""$BOLD""):""$RESET"
-            read new_date
-            
-            # Validate date format
-            case "$new_date" in
-              [0-9][0-9]/[0-9][0-9]/[0-9][0-9])
-                sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
-                mv "$TASKS_FILE.tmp" "$TASKS_FILE"
-                echo "TODO:|$new_date|$task_content" >> "$TASKS_FILE"
-                echo ""
-                echo "$YELLOW""Task postponed to $new_date.""$RESET"
-                sleep 1
-                ;;
-              *)
-                echo ""
-                echo "$RED""Invalid date format. Please use dd/mm/yy""$RESET"
-                sleep 2
-                ;;
-            esac
-            ;;
-          n)
-            # Not required
-            echo ""
-            echo "$RED""Are you sure you want to remove this task? (y/n)""$RESET"
-            read confirm
-            if [ "$confirm" = "y" ]; then
+        # Check if the task is already completed
+        if [ "$task_status" = "DONE:" ]; then
+          echo ""
+          echo "$BOLD""Selected:""$RESET"" ""$STRIKETHROUGH""$CYAN""$task_content""$RESET"" ""$GRAY""(already completed)""$RESET"
+          echo ""
+          echo "$ITALIC""$BOLD""What to do with this task?""$RESET""$ITALIC"
+          echo "$YELLOW""r""$RESET""$ITALIC""-Restore  ""$RED""n""$RESET""$ITALIC""-Remove""$RESET"
+          read action
+          
+          case "$action" in
+            r)
+              # Restore task (mark as active again)
               sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
               mv "$TASKS_FILE.tmp" "$TASKS_FILE"
+              echo "TODO:|$task_date|$task_content" >> "$TASKS_FILE"
               echo ""
-              echo "$RED""Task removed.""$RESET"
+              echo "$YELLOW""Task restored to active status.""$RESET"
               sleep 1
-            fi
-            ;;
-          *)
-            echo ""
-            echo "$RED""Invalid option.""$RESET"
-            sleep 1
-            ;;
-        esac
+              ;;
+            n)
+              # Remove task
+              echo ""
+              echo "$RED""Are you sure you want to remove this task? (y/n)""$RESET"
+              read confirm
+              if [ "$confirm" = "y" ]; then
+                sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
+                mv "$TASKS_FILE.tmp" "$TASKS_FILE"
+                echo ""
+                echo "$RED""Task removed.""$RESET"
+                sleep 1
+              fi
+              ;;
+            *)
+              echo ""
+              echo "$RED""Invalid option.""$RESET"
+              sleep 1
+              ;;
+          esac
+        else
+          # Regular active task
+          echo ""
+          echo "$BOLD""Selected:""$RESET"" ""$CYAN""$task_content""$RESET"
+          echo ""
+          echo "$ITALIC""$BOLD""What to do with this task?""$RESET""$ITALIC"
+          echo "$GREEN""d""$RESET""$ITALIC""-Done  ""$YELLOW""p""$RESET""$ITALIC""-Postpone  ""$RED""n""$RESET""$ITALIC""-Not Required""$RESET"
+          read action
+          
+          case "$action" in
+            d)
+              # Mark as done - keep the same due date
+              sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
+              mv "$TASKS_FILE.tmp" "$TASKS_FILE"
+              echo "DONE:|$task_date|$task_content" >> "$TASKS_FILE"
+              echo ""
+              echo "$GREEN""Task marked as done!""$RESET"
+              sleep 1
+              ;;
+            p)
+              # Postpone task
+              echo ""
+              echo "$BOLD""Enter new due date (""$YELLOW""dd/mm/yy""$RESET""$BOLD""):""$RESET"
+              read new_date
+              
+              # Validate date format
+              case "$new_date" in
+                [0-9][0-9]/[0-9][0-9]/[0-9][0-9])
+                  sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
+                  mv "$TASKS_FILE.tmp" "$TASKS_FILE"
+                  echo "TODO:|$new_date|$task_content" >> "$TASKS_FILE"
+                  echo ""
+                  echo "$YELLOW""Task postponed to $new_date.""$RESET"
+                  sleep 1
+                  ;;
+                *)
+                  echo ""
+                  echo "$RED""Invalid date format. Please use dd/mm/yy""$RESET"
+                  sleep 2
+                  ;;
+              esac
+              ;;
+            n)
+              # Not required
+              echo ""
+              echo "$RED""Are you sure you want to remove this task? (y/n)""$RESET"
+              read confirm
+              if [ "$confirm" = "y" ]; then
+                sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
+                mv "$TASKS_FILE.tmp" "$TASKS_FILE"
+                echo ""
+                echo "$RED""Task removed.""$RESET"
+                sleep 1
+              fi
+              ;;
+            *)
+              echo ""
+              echo "$RED""Invalid option.""$RESET"
+              sleep 1
+              ;;
+          esac
+        fi
+        
         break
       fi
       i=$((i + 1))
