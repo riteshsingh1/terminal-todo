@@ -101,9 +101,18 @@ add_task() {
   echo "$BOLD""Enter task description:""$RESET"" "
   read task
   
+  # Get today's date in dd/mm/yy format (POSIX-compliant)
+  today=$(date +%d/%m/%y)
+  
   echo ""
-  echo "$BOLD""Enter due date (""$YELLOW""dd/mm/yy""$RESET""$BOLD""):""$RESET"" "
+  echo "$BOLD""Enter due date (""$YELLOW""dd/mm/yy""$RESET""$BOLD"") [""$GREEN""Today: $today""$RESET""$BOLD""]:""$RESET"" "
   read due_date
+  
+  # Use today's date if user didn't enter anything
+  if [ -z "$due_date" ]; then
+    due_date="$today"
+    echo "$BLUE""Using today's date: $today""$RESET"
+  fi
   
   # Validate date format (simplified for POSIX)
   case "$due_date" in
@@ -258,9 +267,18 @@ EOF
           ;;
         p)
           # Postpone task
+          # Get today's date for reference
+          today=$(date +%d/%m/%y)
+          
           echo ""
-          echo "$BOLD""Enter new due date (""$YELLOW""dd/mm/yy""$RESET""$BOLD""):""$RESET"
+          echo "$BOLD""Enter new due date (""$YELLOW""dd/mm/yy""$RESET""$BOLD"") [""$GREEN""Today: $today""$RESET""$BOLD""]:""$RESET"
           read new_date
+          
+          # Use today's date if user didn't enter anything
+          if [ -z "$new_date" ]; then
+            new_date="$today"
+            echo "$BLUE""Using today's date: $today""$RESET"
+          fi
           
           # Validate date format
           case "$new_date" in

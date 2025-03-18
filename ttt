@@ -85,8 +85,17 @@ add_task() {
   echo -e "${BOLD}Enter task description:${RESET} "
   read -r task
   
-  echo -e "\n${BOLD}Enter due date (${YELLOW}dd/mm/yy${RESET}${BOLD}):${RESET} "
+  # Get today's date in dd/mm/yy format
+  local today=$(date +%d/%m/%y)
+  
+  echo -e "\n${BOLD}Enter due date (${YELLOW}dd/mm/yy${RESET}${BOLD}) [${GREEN}Today: $today${RESET}${BOLD}]:${RESET} "
   read -r due_date
+  
+  # Use today's date if user didn't enter anything
+  if [ -z "$due_date" ]; then
+    due_date="$today"
+    echo -e "${BLUE}Using today's date: $today${RESET}"
+  fi
   
   # Validate date format
   if [[ ! $due_date =~ ^[0-9]{2}/[0-9]{2}/[0-9]{2}$ ]]; then
@@ -211,8 +220,17 @@ interact_with_tasks() {
           ;;
         p)
           # Postpone task
-          echo -e "\n\n${BOLD}Enter new due date (${YELLOW}dd/mm/yy${RESET}${BOLD}):${RESET}"
+          # Get today's date for reference
+          local today=$(date +%d/%m/%y)
+          
+          echo -e "\n\n${BOLD}Enter new due date (${YELLOW}dd/mm/yy${RESET}${BOLD}) [${GREEN}Today: $today${RESET}${BOLD}]:${RESET}"
           read -r new_date
+          
+          # Use today's date if user didn't enter anything
+          if [ -z "$new_date" ]; then
+            new_date="$today"
+            echo -e "${BLUE}Using today's date: $today${RESET}"
+          fi
           
           # Validate date format
           if [[ ! $new_date =~ ^[0-9]{2}/[0-9]{2}/[0-9]{2}$ ]]; then
