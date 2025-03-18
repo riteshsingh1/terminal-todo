@@ -137,6 +137,18 @@ count_tasks() {
   echo "$ITALIC""$BOLD""Status:""$RESET""$ITALIC"" ""$BLUE""$active_count""$RESET""$ITALIC"" active, ""$GREEN""$done_count""$RESET""$ITALIC"" completed""$RESET"
 }
 
+# Function to remove a task line from file
+remove_line_from_file() {
+  task_line="$1"
+  temp_file="$TASKS_FILE.tmp"
+  
+  # Write all lines except the one to remove to a temp file
+  awk -v line="$task_line" '$0 != line' "$TASKS_FILE" > "$temp_file"
+  
+  # Replace original with temp file
+  mv "$temp_file" "$TASKS_FILE"
+}
+
 # Function to interact with tasks
 interact_with_tasks() {
   display_tasks
@@ -173,121 +185,118 @@ interact_with_tasks() {
     exit 0
   elif [ "$selection" -le "$task_count" ] 2>/dev/null && [ "$selection" -gt 0 ]; then
     # Extract the selected task
-    i=1
-    selected_line=""
-    
-    echo "$all_tasks" | while IFS= read -r line; do
+    i=0
+    selected_task_line=""
+    while IFS= read -r line; do
+      i=$((i + 1))
       if [ "$i" -eq "$selection" ]; then
-        # Parse the selected line
-        task_content=$(echo "$line" | cut -d'|' -f3)
-        task_status=$(echo "$line" | cut -d'|' -f1)
-        task_date=$(echo "$line" | cut -d'|' -f2)
-        
-        # Check if the task is already completed
-        if [ "$task_status" = "DONE:" ]; then
-          echo ""
-          echo "$BOLD""Selected:""$RESET"" ""$STRIKETHROUGH""$CYAN""$task_content""$RESET"" ""$GRAY""(already completed)""$RESET"
-          echo ""
-          echo "$ITALIC""$BOLD""What to do with this task?""$RESET""$ITALIC"
-          echo "$YELLOW""r""$RESET""$ITALIC""-Restore  ""$RED""n""$RESET""$ITALIC""-Remove""$RESET"
-          read action
-          
-          case "$action" in
-            r)
-              # Restore task (mark as active again)
-              sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
-              mv "$TASKS_FILE.tmp" "$TASKS_FILE"
-              echo "TODO:|$task_date|$task_content" >> "$TASKS_FILE"
-              echo ""
-              echo "$YELLOW""Task restored to active status.""$RESET"
-              sleep 1
-              ;;
-            n)
-              # Remove task
-              echo ""
-              echo "$RED""Are you sure you want to remove this task? (y/n)""$RESET"
-              read confirm
-              if [ "$confirm" = "y" ]; then
-                sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
-                mv "$TASKS_FILE.tmp" "$TASKS_FILE"
-                echo ""
-                echo "$RED""Task removed.""$RESET"
-                sleep 1
-              fi
-              ;;
-            *)
-              echo ""
-              echo "$RED""Invalid option.""$RESET"
-              sleep 1
-              ;;
-          esac
-        else
-          # Regular active task
-          echo ""
-          echo "$BOLD""Selected:""$RESET"" ""$CYAN""$task_content""$RESET"
-          echo ""
-          echo "$ITALIC""$BOLD""What to do with this task?""$RESET""$ITALIC"
-          echo "$GREEN""d""$RESET""$ITALIC""-Done  ""$YELLOW""p""$RESET""$ITALIC""-Postpone  ""$RED""n""$RESET""$ITALIC""-Not Required""$RESET"
-          read action
-          
-          case "$action" in
-            d)
-              # Mark as done - keep the same due date
-              sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
-              mv "$TASKS_FILE.tmp" "$TASKS_FILE"
-              echo "DONE:|$task_date|$task_content" >> "$TASKS_FILE"
-              echo ""
-              echo "$GREEN""Task marked as done!""$RESET"
-              sleep 1
-              ;;
-            p)
-              # Postpone task
-              echo ""
-              echo "$BOLD""Enter new due date (""$YELLOW""dd/mm/yy""$RESET""$BOLD""):""$RESET"
-              read new_date
-              
-              # Validate date format
-              case "$new_date" in
-                [0-9][0-9]/[0-9][0-9]/[0-9][0-9])
-                  sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
-                  mv "$TASKS_FILE.tmp" "$TASKS_FILE"
-                  echo "TODO:|$new_date|$task_content" >> "$TASKS_FILE"
-                  echo ""
-                  echo "$YELLOW""Task postponed to $new_date.""$RESET"
-                  sleep 1
-                  ;;
-                *)
-                  echo ""
-                  echo "$RED""Invalid date format. Please use dd/mm/yy""$RESET"
-                  sleep 2
-                  ;;
-              esac
-              ;;
-            n)
-              # Not required
-              echo ""
-              echo "$RED""Are you sure you want to remove this task? (y/n)""$RESET"
-              read confirm
-              if [ "$confirm" = "y" ]; then
-                sed "/$line/d" "$TASKS_FILE" > "$TASKS_FILE.tmp"
-                mv "$TASKS_FILE.tmp" "$TASKS_FILE"
-                echo ""
-                echo "$RED""Task removed.""$RESET"
-                sleep 1
-              fi
-              ;;
-            *)
-              echo ""
-              echo "$RED""Invalid option.""$RESET"
-              sleep 1
-              ;;
-          esac
-        fi
-        
+        selected_task_line="$line"
         break
       fi
-      i=$((i + 1))
-    done
+    done << EOF
+$all_tasks
+EOF
+
+    # Parse the selected line
+    task_content=$(echo "$selected_task_line" | cut -d'|' -f3)
+    task_status=$(echo "$selected_task_line" | cut -d'|' -f1)
+    task_date=$(echo "$selected_task_line" | cut -d'|' -f2)
+    
+    # Check if the task is already completed
+    if [ "$task_status" = "DONE:" ]; then
+      echo ""
+      echo "$BOLD""Selected:""$RESET"" ""$STRIKETHROUGH""$CYAN""$task_content""$RESET"" ""$GRAY""(already completed)""$RESET"
+      echo ""
+      echo "$ITALIC""$BOLD""What to do with this task?""$RESET""$ITALIC"
+      echo "$YELLOW""r""$RESET""$ITALIC""-Restore  ""$RED""n""$RESET""$ITALIC""-Remove""$RESET"
+      read action
+      
+      case "$action" in
+        r)
+          # Restore task (mark as active again)
+          remove_line_from_file "$selected_task_line"
+          echo "TODO:|$task_date|$task_content" >> "$TASKS_FILE"
+          echo ""
+          echo "$YELLOW""Task restored to active status.""$RESET"
+          sleep 1
+          ;;
+        n)
+          # Remove task
+          echo ""
+          echo "$RED""Are you sure you want to remove this task? (y/n)""$RESET"
+          read confirm
+          if [ "$confirm" = "y" ]; then
+            remove_line_from_file "$selected_task_line"
+            echo ""
+            echo "$RED""Task removed.""$RESET"
+            sleep 1
+          fi
+          ;;
+        *)
+          echo ""
+          echo "$RED""Invalid option.""$RESET"
+          sleep 1
+          ;;
+      esac
+    else
+      # Regular active task
+      echo ""
+      echo "$BOLD""Selected:""$RESET"" ""$CYAN""$task_content""$RESET"
+      echo ""
+      echo "$ITALIC""$BOLD""What to do with this task?""$RESET""$ITALIC"
+      echo "$GREEN""d""$RESET""$ITALIC""-Done  ""$YELLOW""p""$RESET""$ITALIC""-Postpone  ""$RED""n""$RESET""$ITALIC""-Not Required""$RESET"
+      read action
+      
+      case "$action" in
+        d)
+          # Mark as done - keep the same due date
+          remove_line_from_file "$selected_task_line"
+          echo "DONE:|$task_date|$task_content" >> "$TASKS_FILE"
+          echo ""
+          echo "$GREEN""Task marked as done!""$RESET"
+          sleep 1
+          ;;
+        p)
+          # Postpone task
+          echo ""
+          echo "$BOLD""Enter new due date (""$YELLOW""dd/mm/yy""$RESET""$BOLD""):""$RESET"
+          read new_date
+          
+          # Validate date format
+          case "$new_date" in
+            [0-9][0-9]/[0-9][0-9]/[0-9][0-9])
+              remove_line_from_file "$selected_task_line"
+              echo "TODO:|$new_date|$task_content" >> "$TASKS_FILE"
+              echo ""
+              echo "$YELLOW""Task postponed to $new_date.""$RESET"
+              sleep 1
+              ;;
+            *)
+              echo ""
+              echo "$RED""Invalid date format. Please use dd/mm/yy""$RESET"
+              sleep 2
+              ;;
+          esac
+          ;;
+        n)
+          # Not required
+          echo ""
+          echo "$RED""Are you sure you want to remove this task? (y/n)""$RESET"
+          read confirm
+          if [ "$confirm" = "y" ]; then
+            remove_line_from_file "$selected_task_line"
+            echo ""
+            echo "$RED""Task removed.""$RESET"
+            sleep 1
+          fi
+          ;;
+        *)
+          echo ""
+          echo "$RED""Invalid option.""$RESET"
+          sleep 1
+          ;;
+      esac
+    fi
   else
     echo ""
     echo "$RED""Invalid selection.""$RESET"

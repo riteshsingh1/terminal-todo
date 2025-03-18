@@ -114,6 +114,18 @@ count_tasks() {
   echo -e "${ITALIC}${BOLD}Status:${RESET}${ITALIC} ${BLUE}$active_count${RESET}${ITALIC} active, ${GREEN}$done_count${RESET}${ITALIC} completed${RESET}"
 }
 
+# Function to safely remove a line from the tasks file
+remove_task_line() {
+  local line_content="$1"
+  local temp_file="$TASKS_FILE.tmp"
+  
+  # Create a temp file without the line we want to remove
+  grep -v "^$line_content$" "$TASKS_FILE" > "$temp_file"
+  
+  # Replace the original file with the temp file
+  mv "$temp_file" "$TASKS_FILE"
+}
+
 # Function to interact with tasks
 interact_with_tasks() {
   display_tasks
@@ -162,7 +174,7 @@ interact_with_tasks() {
       case "$action" in
         r)
           # Restore task (mark as active again)
-          sed -i.bak "/$selected_line/d" "$TASKS_FILE"
+          remove_task_line "$selected_line"
           echo "TODO:|$task_date|$task_content" >> "$TASKS_FILE"
           echo -e "\n${YELLOW}Task restored to active status.${RESET}"
           sleep 1
@@ -172,7 +184,7 @@ interact_with_tasks() {
           echo -e "\n${RED}Are you sure you want to remove this task? (y/n)${RESET}"
           read -n 1 -s confirm
           if [ "$confirm" = "y" ]; then
-            sed -i.bak "/$selected_line/d" "$TASKS_FILE"
+            remove_task_line "$selected_line"
             echo -e "\n${RED}Task removed.${RESET}"
             sleep 1
           fi
@@ -192,7 +204,7 @@ interact_with_tasks() {
       case "$action" in
         d)
           # Mark as done - keep the same due date
-          sed -i.bak "/$selected_line/d" "$TASKS_FILE"
+          remove_task_line "$selected_line"
           echo "DONE:|$task_date|$task_content" >> "$TASKS_FILE"
           echo -e "\n${GREEN}Task marked as done!${RESET}"
           sleep 1
@@ -207,7 +219,7 @@ interact_with_tasks() {
             echo -e "\n${RED}Invalid date format. Please use dd/mm/yy${RESET}"
             sleep 2
           else
-            sed -i.bak "/$selected_line/d" "$TASKS_FILE"
+            remove_task_line "$selected_line"
             echo "TODO:|$new_date|$task_content" >> "$TASKS_FILE"
             echo -e "\n${YELLOW}Task postponed to $new_date.${RESET}"
             sleep 1
@@ -218,7 +230,7 @@ interact_with_tasks() {
           echo -e "\n${RED}Are you sure you want to remove this task? (y/n)${RESET}"
           read -n 1 -s confirm
           if [ "$confirm" = "y" ]; then
-            sed -i.bak "/$selected_line/d" "$TASKS_FILE"
+            remove_task_line "$selected_line"
             echo -e "\n${RED}Task removed.${RESET}"
             sleep 1
           fi
@@ -233,9 +245,6 @@ interact_with_tasks() {
     echo -e "\n${RED}Invalid selection.${RESET}"
     sleep 1
   fi
-  
-  # Clean up backup file
-  rm -f "$TASKS_FILE.bak" 2>/dev/null
   
   # Show tasks again
   interact_with_tasks
