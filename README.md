@@ -45,7 +45,7 @@ Status: 3 active, 1 completed
 
 ```bash
 # Clone this repository or download the files
-git clone https://github.com/yourusername/terminal-todo.git
+git clone https://github.com/riteshsingh1/terminal-todo.git
 cd terminal-todo
 
 # Run the installation script
