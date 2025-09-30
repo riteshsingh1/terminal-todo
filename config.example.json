@@ -1,0 +1,16 @@
+{
+  "_comment": "Example configuration file for TTD",
+  "default_project": "Inbox",
+  "default_priority": "P4",
+  "date_format": "%Y-%m-%d",
+  "show_completed": false,
+  "max_display_tasks": 20,
+  "colors": {
+    "P1": "red",
+    "P2": "yellow", 
+    "P3": "blue",
+    "P4": "dim"
+  },
+  "auto_save": true,
+  "backup_on_start": false
+}
